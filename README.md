@@ -8,9 +8,9 @@ A human-centered Linux backup system based on meaning, not raw disk cloning.
 
 ## Overview
 
-This project implements a **semantic backup strategy** for Linux systems.
+Semantic Backup System implements a **meaning-oriented backup strategy** for Linux systems.
 
-Instead of imaging entire disks, it preserves only what defines a system’s identity:
+Instead of cloning entire disks, it preserves only what defines a system’s identity:
 
 - user data
 - system configuration
@@ -19,28 +19,30 @@ Instead of imaging entire disks, it preserves only what defines a system’s ide
 
 It deliberately excludes entropy:
 
-- caches  
-- browser data  
-- temporary files  
-- regenerated system components  
+- caches
+- browser data
+- temporary files
+- regenerated system components
+- system noise
 
-The goal is reproducible system personality — not binary duplication.
+The objective is reproducible system personality — not binary duplication.
 
 ---
 
 ## Current Release (v0.1.0)
 
-This version provides:
+This release provides:
 
 - A Bash-based backup engine (`backup-now.sh`)
-- rsync-based incremental backup
-- Selective directory preservation
+- rsync-based incremental synchronization
+- OS1 / OS2 separation logic
 - Clean exclusion policy
-- Designed for manual or cron execution
+- Human-readable execution reporting
+- Designed for manual execution or systemd integration
 
 This is the foundational engine.
 
-It is stable, minimal, and intentionally small.
+Stable. Minimal. Intentional.
 
 ---
 
@@ -60,7 +62,7 @@ It is stable, minimal, and intentionally small.
 - locales
 - temporary directories
 - mounted devices
-- system-generated artifacts
+- regenerated system artifacts
 
 ---
 
@@ -68,22 +70,14 @@ It is stable, minimal, and intentionally small.
 
 > Backup meaning, not entropy.
 
-A fresh OS install + semantic restore  
+A fresh OS installation + semantic restore  
 should recreate the machine’s personality  
 in minutes.
 
----
-
-## Roadmap
-
-Future versions may include:
-
-- multi-slot rotation logic
-- restore automation script
-- config-driven inclusion/exclusion rules
-- OS1 / OS2 profile separation
-- dry-run verification mode
-- integrity validation
+Small backups.  
+Fast restores.  
+No garbage.  
+No vendor lock-in.
 
 ---
 
@@ -100,10 +94,24 @@ The machine becomes *you* again.
 
 ---
 
+## Roadmap
+
+Future versions may include:
+
+- multi-slot rotation logic
+- restore automation script
+- config-driven inclusion/exclusion rules
+- integrity verification
+- dry-run validation mode
+- extended OS profile abstraction
+
+---
+
 ## Requirements
 
 - bash
 - rsync
+- systemd (optional)
 - cron (optional)
 
 ---
@@ -112,5 +120,5 @@ The machine becomes *you* again.
 
 MIT
 
-This is not just a script.  
+This project is not just a script.  
 It is a methodology.
