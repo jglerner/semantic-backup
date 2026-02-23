@@ -1,0 +1,52 @@
+# Browser transient
+.config/google-chrome/*/Cache/
+.config/google-chrome/*/Code Cache/
+.config/google-chrome/*/GPUCache/
+.config/google-chrome/*/ShaderCache/
+.config/google-chrome/*/GrShaderCache/
+.config/google-chrome/*/Dawn*
+.config/google-chrome/*/Safe Browsing/
+.config/google-chrome/*/component_crx_cache/
+
+.config/BraveSoftware/*/Cache/
+.config/BraveSoftware/*/Code Cache/
+.config/BraveSoftware/*/GPUCache/
+.config/BraveSoftware/*/ShaderCache/
+.config/BraveSoftware/*/GrShaderCache/
+.config/BraveSoftware/*/Dawn*
+.config/BraveSoftware/*/Safe Browsing/
+.config/BraveSoftware/*/component_crx_cache/
+
+mnt/
+media/
+timeshift/
+lost+found/
+.cache/
+.mozilla/cache/
+.npm/
+.gradle/
+.rustup/
+.cargo/
+.local/share/Trash/
+.config/google-chrome/OptGuideOnDeviceModel/
+git-backups/
+github-backup/
+RESTORE/
+*.log
+*.tmp
+*.iso
+*.img
+GPUCache/
+ShaderCache/
+GrShaderCache/
+DawnGraphiteCache/
+DawnWebGPUCache/
+Safe Browsing/
+component_crx_cache/
+*.log
+*.journal
+*-wal
+IndexedDB/*/blob/
+Cache/
+Code Cache/
+RESTORE

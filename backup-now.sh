@@ -1,35 +1,35 @@
 #!/bin/bash
-# backup-now.sh - Incremental semantic backup with progress + sleep lock
-
-#if [ -z "$INHIBITED" ]; then
-#    export INHIBITED=1
-#    exec systemd-inhibit --what=idle:sleep --why="Running backup-now.sh" "$0" "$@"
-#fi
-
-#set -e
 
 START_TIME=$(date +%s)
 
-# --- Sources ---
-OS1_SRC="$HOME"
-OS2_SRC="$HOME/mnt/ldme7/home"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EXCLUDE_FILE="$SCRIPT_DIR/exclude.txt"
 
-# --- Destination ---
-BASE_DST="/media/jglerner/KINGSTON/slot0"
-
-# --- Safety checks ---
-if [ ! -d "/media/jglerner/KINGSTON" ]; then
-    echo "ERROR: KINGSTON not mounted."
+if [ ! -f "$EXCLUDE_FILE" ]; then
+    echo "ERROR: exclude.txt not found."
     exit 1
 fi
 
-#20260218
-#if [ ! -d "$OS2_SRC" ]; then
-#    echo "WARNING: OS2 not mounted, skipping OS2."
-#    DO_OS2=0
-#else
-#    DO_OS2=1
-#fi
+EXCLUDE_OPTS="--exclude-from=$EXCLUDE_FILE"
+
+OS1_SRC="$HOME"
+OS2_SRC="$HOME/mnt/ldme7/home"
+
+MOUNT_BASE="/media/$USER"
+DEVICE_LABEL="SLOTX_01"
+
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+else
+    BRANCH="no-git"
+fi
+
+BASE_DST="$MOUNT_BASE/$DEVICE_LABEL/$BRANCH"
+
+if ! mountpoint -q "$MOUNT_BASE/$DEVICE_LABEL"; then
+    echo "ERROR: $DEVICE_LABEL not mounted."
+    exit 1
+fi
 
 if mountpoint -q "$HOME/mnt/ldme7"; then
     DO_OS2=1
@@ -38,35 +38,6 @@ else
     echo "OS2 not mounted — skipping."
 fi
 
-#20260218  end
-
-# --- Exclusions ---
-EXCLUDE=(
-    "mnt/"
-    "media/"
-    "timeshift/"
-    "lost+found/"
-    ".cache/"
-    ".mozilla/cache/"
-    ".npm/"
-    ".gradle/"
-    ".rustup/"
-    ".cargo/"
-    ".local/share/Trash/"
-    ".config/google-chrome/OptGuideOnDeviceModel/"
-    "git-backups/"
-    "github-backup/"
-    "RESTORE/"
-    "*.log"
-    "*.tmp"
-)
-
-EXCLUDE_OPTS=""
-for e in "${EXCLUDE[@]}"; do
-    EXCLUDE_OPTS+=" --exclude=$e"
-done
-
-# --- Rsync options ---
 RSYNC_OPTS="-avh --delete --partial --info=progress2"
 
 elapsed() {
@@ -84,12 +55,21 @@ move_specials() {
 
     mkdir -p "$DST/APK" "$DST/APPIMAGE" "$DST/ANDROID"
 
-    rsync -avh --ignore-existing "$SRC"/*.apk "$DST/APK/" 2>/dev/null
-    rsync -avh --ignore-existing "$SRC"/*.AppImage "$DST/APPIMAGE/" 2>/dev/null
+    shopt -s nullglob
+
+    for f in "$SRC"/*.apk; do
+        rsync -avh --ignore-existing "$f" "$DST/APK/"
+    done
+
+    for f in "$SRC"/*.AppImage; do
+        rsync -avh --ignore-existing "$f" "$DST/APPIMAGE/"
+    done
 
     if [ -d "$SRC/Android" ]; then
         rsync -avh --ignore-existing "$SRC/Android/" "$DST/ANDROID/"
     fi
+
+    shopt -u nullglob
 }
 
 backup_home() {
@@ -104,30 +84,22 @@ backup_home() {
     echo "=============================="
 
     mkdir -p "$DST"
+
     rsync $RSYNC_OPTS $EXCLUDE_OPTS "$SRC/" "$DST/"
+    rc=$?
 
-#20260218
+    if [ "$rc" -eq 23 ]; then
+        echo "Warning: rsync partial transfer (code 23) – likely live file changes."
+        rc=0
+    fi
 
-rsync $RSYNC_OPTS $EXCLUDE_OPTS "$SRC/" "$DST/"
-rc=$?
-
-if [ "$rc" -eq 23 ]; then
-    echo "Warning: rsync partial transfer (code 23) – likely live file changes."
-    rc=0
-fi
-
-if [ "$rc" -ne 0 ]; then
-    return "$rc"
-fi
+    if [ "$rc" -ne 0 ]; then
+        exit "$rc"
+    fi
 
     echo "Finished $NAME in $(elapsed)"
     echo
-
-#20260218 end
-
 }
-
-# ================= RUN =================
 
 backup_home "$OS1_SRC" "$BASE_DST/OS1" "OS1"
 move_specials "$OS1_SRC" "$BASE_DST/OS1"
@@ -136,9 +108,6 @@ if [ "$DO_OS2" -eq 1 ]; then
     backup_home "$OS2_SRC" "$BASE_DST/OS2" "OS2"
     move_specials "$OS2_SRC" "$BASE_DST/OS2"
 fi
-
-END_TIME=$(date +%s)
-TOTAL_MIN=$(( (END_TIME - START_TIME) / 60 ))
 
 END_TIME=$(date +%s)
 TOTAL_SEC=$((END_TIME - START_TIME))
