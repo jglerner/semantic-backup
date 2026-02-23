@@ -1,0 +1,7 @@
+[Unit]
+Description=Semantic Backup
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemd-inhibit --what=sleep:idle --mode=block --why="Semantic Backup Running" %h/workspace/semantic-backup/infra/backup-now.sh
+WorkingDirectory=%h/workspace/semantic-backup/infra

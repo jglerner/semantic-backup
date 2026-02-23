@@ -1,0 +1,9 @@
+[Unit]
+Description=Run Semantic Backup 1 hour after boot
+
+[Timer]
+OnBootSec=1h
+Persistent=true
+
+[Install]
+WantedBy=default.target
