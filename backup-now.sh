@@ -31,7 +31,7 @@ if ! mountpoint -q "$MOUNT_BASE/$DEVICE_LABEL"; then
     exit 1
 fi
 
-if mountpoint -q "$HOME/mnt/ldme7"; then
+if mountpoint -q "$HOME/infra/system-backups/mnt/ldme7"; then
     DO_OS2=1
 else
     DO_OS2=0
