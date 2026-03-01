@@ -2,3 +2,4 @@
 slot0-backup-logs/
 .env
 .DS_Store
+token.txt
