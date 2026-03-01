@@ -1,0 +1,19 @@
+# System noise
+.cache/
+.local/share/Trash/
+lost+found/
+
+# Temporary / rebuildable
+*.tmp
+*.log
+*.journal
+*-wal
+
+# Large media (optional depending on your philosophy)
+*.iso
+*.img
+
+# System mount points (safety)
+/mnt/
+/media/
+/timeshift/
