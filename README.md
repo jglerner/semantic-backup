@@ -6,7 +6,7 @@
 
 1. Mount external device
 2. Run:
-   ./backup.sh
+   ./backup-now.sh
 
 ---
 
