@@ -1,6 +1,7 @@
-# Semantic Backup – Engine Layer
+Semantic Backup – Engine Layer
 
-## Version: v0.2.1
+## Version 0.3.0
+Refactored to local-first incremental snapshot engine.
 
 ## Quick Start
 
