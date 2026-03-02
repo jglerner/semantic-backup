@@ -1,0 +1,5 @@
+Documents
+Projects
+infra/engine
+.gitconfig
+.ssh
