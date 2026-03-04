@@ -3,3 +3,12 @@ slot0-backup-logs/
 .env
 .DS_Store
 token.txt
+
+# Editor backup files
+*.save
+*~
+*.swp
+
+# Temporary files
+*.tmp
+*.log
