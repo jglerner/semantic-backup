@@ -1,14 +1,22 @@
 Semantic Backup – Engine Layer
 
-## Version 0.3.0
+Minimal deterministic snapshot backup system for Linux.
+Inspired by the simplicity of `rsync` and the reliability of
+date-based immutable snapshots.
+
+## Version 0.3.1
+
 Refactored to local-first incremental snapshot engine.
+Minor inconsistencies corrected (2026-03-05)
 
 ## Quick Start
 
-1. Mount external device
-2. Run:
-   ./backup-now.sh
+1. Mount the external device
 
+2. Run the backup:
+
+```bash
+./backup-now.sh
 ---
 
 ## Overview
@@ -32,37 +40,49 @@ The system is designed for:
 
 ### Storage Layout (External Device)
 
-Each snapshot:
+Each snapshot is stored as a date-based directory:
 
-- Is created once per day
-- Is immutable after creation
-- Uses hard links to previous snapshots
-- Appears as a full copy
-- Consumes space only for changed files
+`/snapshots/YYYYMMDD/`
 
-Additional directories:
+Characteristics:
 
-```
-/snapshots/YYYYMMDD/
-```
+- One snapshot is created per day
+- Snapshots are immutable once created
+- Hard links are used to reference unchanged files
+- Each snapshot appears as a full filesystem copy
+- Disk space is consumed only by changed files
 
-Each snapshot:
+This structure allows fast browsing and simple recovery without
+special tools.
 
-- Is created once per day
-- Is immutable after creation
-- Uses hard links to previous snapshots
-- Appears as a full copy
-- Consumes space only for changed files
+### Additional Directories
 
-Additional directories:
+The system relies on a small number of predictable directories:
 
-Each snapshot:
+Local snapshot storage:
 
-- Is created once per day
-- Is immutable after creation
-- Uses hard links to previous snapshots
-- Appears as a full copy
-- Consumes space only for changed files
+`/home/<user>/infra/snapshots/`
 
-Additional directories:
+This directory contains the primary snapshot chain created on the
+local system.
 
+External backup device:
+
+`/mnt/semantic_backup/snapshots/`
+
+When an external device is available, the newest snapshot is synced
+to the external storage for redundancy.
+
+### Retention Policy
+
+Snapshots are retained for a configurable number of days.
+Older snapshots are automatically removed during each run.
+
+This keeps storage usage predictable while preserving recent
+recovery points.
+
+### Recovery
+
+Because each snapshot appears as a full filesystem tree,
+files can be restored simply by copying them back from the
+desired snapshot directory.
