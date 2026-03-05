@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+COMMAND=${1:-run}
+
 ########################################
 # HARDENED ENVIRONMENT
 ########################################
@@ -24,6 +26,24 @@ EXTERNAL_BASE="$MOUNT_POINT/snapshots"
 
 TODAY=$(date +%Y%m%d)
 LOCAL_TODAY="$LOCAL_BASE/$TODAY"
+
+case "$COMMAND" in
+    run)
+        ;;
+    status)
+        systemctl status semantic-backup.service
+        exit 0
+        ;;
+    verify)
+        echo "Available snapshots:"
+        ls -1 "$LOCAL_BASE"
+        exit 0
+        ;;
+    *)
+        echo "Usage: semantic-backup {run|status|verify}"
+        exit 1
+        ;;
+esac
 
 ########################################
 # FUNCTIONS
@@ -84,6 +104,7 @@ else
 fi
 
 echo "Applying local retention policy..."
+
 find "$LOCAL_BASE" -mindepth 1 -maxdepth 1 -type d -mtime +$RETENTION_DAYS -exec rm -rf {} +
 
 ########################################
@@ -97,7 +118,6 @@ if ! mount UUID="$UUID" "$MOUNT_POINT"; then
     exit 0
 fi
 
-echo "External drive mounted."
 echo "External drive mounted."
 
 mkdir -p "$EXTERNAL_BASE"
