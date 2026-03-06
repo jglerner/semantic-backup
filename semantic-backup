@@ -17,32 +17,84 @@ RETENTION_DAYS=7
 
 SOURCE="/home/jglerner"
 INCLUDE_FILE="/home/jglerner/infra/engine/include.txt"
+LOG_FILE="/var/log/semantic-backup.log"
 
-LOCAL_BASE="/home/jglerner/infra/snapshots"
+LOCAL_BASE="/var/lib/semantic-backup/snapshots"
 
 MOUNT_POINT="/mnt/semantic_backup"
 UUID="f0e81617-0984-4bfc-bc9e-e01624dac735"
 EXTERNAL_BASE="$MOUNT_POINT/snapshots"
 
+    echo
+    echo "Latest snapshot preview:"
+    LATEST=$(ls -1 "$LOCAL_BASE" | sort | tail -n 1)
+
+    if [ -n "$LATEST" ]; then
+        ls "$LOCAL_BASE/$LATEST" | head
+    fi
 TODAY=$(date +%Y%m%d)
 LOCAL_TODAY="$LOCAL_BASE/$TODAY"
 
 case "$COMMAND" in
     run)
         ;;
-    status)
+status)
         systemctl status semantic-backup.service
         exit 0
         ;;
-    verify)
-        echo "Available snapshots:"
-        ls -1 "$LOCAL_BASE"
-        exit 0
-        ;;
-    *)
-        echo "Usage: semantic-backup {run|status|verify}"
+
+verify)
+    echo "======================================="
+    echo " Snapshot verification"
+    echo "======================================="
+
+    if [ ! -d "$LOCAL_BASE" ]; then
+        echo "ERROR: Snapshot directory missing."
         exit 1
-        ;;
+    fi
+
+    echo "Available snapshots:"
+    ls -1 "$LOCAL_BASE"
+
+    echo
+    echo "Disk usage:"
+    du -sh "$LOCAL_BASE"/* 2>/dev/null || true
+
+    echo
+    echo "Latest snapshot preview:"
+    LATEST=$(ls -1 "$LOCAL_BASE" | sort | tail -n 1)
+
+    if [ -n "$LATEST" ]; then
+        ls "$LOCAL_BASE/$LATEST" | head
+    fi
+
+    echo
+    echo "Verification complete."
+    exit 0
+    ;;
+
+restore)
+    SNAPSHOT=${2:-}
+
+    if [ -z "$SNAPSHOT" ]; then
+        echo "Usage: semantic-backup restore YYYYMMDD"
+        exit 1
+    fi
+
+    SNAPSHOT_PATH="$LOCAL_BASE/$SNAPSHOT"
+
+    if [ ! -d "$SNAPSHOT_PATH" ]; then
+        echo "Snapshot not found: $SNAPSHOT"
+        exit 1
+    fi
+
+    echo "Restoring snapshot $SNAPSHOT..."
+    rsync -a --delete "$SNAPSHOT_PATH/" "$SOURCE/"
+
+    echo "Restore complete."
+    exit 0
+    ;;
+
 esac
 
 ########################################
@@ -61,6 +113,10 @@ cleanup_mount() {
         sync
         umount "$MOUNT_POINT" || true
     fi
+}
+
+log() {
+    echo "$(date '+%F %T') $*" | tee -a "$LOG_FILE"
 }
 
 trap cleanup_mount EXIT
@@ -92,9 +148,9 @@ else
         LINK_DEST=""
     fi
 
-    echo "Creating local snapshot..."
+    log "Creating local snapshot..."
 
-    rsync -a --delete \
+    rsync -aHAX --delete \
         $LINK_DEST \
         --files-from="$INCLUDE_FILE" \
         "$SOURCE/" \
