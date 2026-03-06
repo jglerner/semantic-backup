@@ -1,88 +1,284 @@
-Semantic Backup – Engine Layer
+# Semantic Backup
 
-Minimal deterministic snapshot backup system for Linux.
-Inspired by the simplicity of `rsync` and the reliability of
-date-based immutable snapshots.
+**Semantic Backup** is a lightweight Linux backup system designed for reliability, transparency, and zero-surprise recovery.
 
-## Version 0.3.1
+It creates **incremental daily snapshots** of selected directories, keeps them locally, and synchronizes them to an external device when available.
 
-Refactored to local-first incremental snapshot engine.
-Minor inconsistencies corrected (2026-03-05)
+The design philosophy is:
 
-## Quick Start
+* **Local-first backups**
+* **Deterministic snapshots**
+* **Minimal dependencies**
+* **Transparent filesystem structure**
+* **Safe external synchronization**
 
-1. Mount the external device
-
-2. Run the backup:
-
-```bash
-./backup-now.sh
----
-
-## Overview
-
-This directory contains the core backup engine of the Semantic Backup System.
-
-It implements a deterministic, immutable, date-based snapshot model using
-`rsync` with hard-link support.
-
-The system is designed for:
-
-- Reliable incremental backups
-- Storage-efficient snapshots
-- Clear recovery structure
-- Minimal complexity
-- Predictable behavior
+The project is intentionally simple: it is built entirely around **bash + rsync + systemd**.
 
 ---
 
-## Architecture
+# Features
 
-### Storage Layout (External Device)
+### Incremental snapshot engine
 
-Each snapshot is stored as a date-based directory:
+Snapshots are stored as dated directories:
 
-`/snapshots/YYYYMMDD/`
+```
+YYYYMMDD
+```
 
-Characteristics:
+Example:
 
-- One snapshot is created per day
-- Snapshots are immutable once created
-- Hard links are used to reference unchanged files
-- Each snapshot appears as a full filesystem copy
-- Disk space is consumed only by changed files
+```
+/var/lib/semantic-backup/snapshots/
 
-This structure allows fast browsing and simple recovery without
-special tools.
+20260302
+20260303
+20260304
+20260306
+```
 
-### Additional Directories
+Snapshots use `rsync --link-dest`, meaning unchanged files are **hard-linked** to previous snapshots.
+This provides **incremental storage with full snapshot visibility**.
 
-The system relies on a small number of predictable directories:
+Each snapshot behaves like a **complete filesystem copy**, while consuming minimal disk space.
 
-Local snapshot storage:
+---
 
-`/home/<user>/infra/snapshots/`
+### Local-first backup strategy
 
-This directory contains the primary snapshot chain created on the
-local system.
+Backups are always created locally first:
 
-External backup device:
+```
+/var/lib/semantic-backup/snapshots
+```
 
-`/mnt/semantic_backup/snapshots/`
+Only after a successful local snapshot does the system:
 
-When an external device is available, the newest snapshot is synced
-to the external storage for redundancy.
+1. Mount the external backup device
+2. Synchronize snapshots
+3. Apply retention policies
+4. Flush buffers
+5. Safely unmount the device
 
-### Retention Policy
+This guarantees that **local recovery is always possible**, even if the external drive is disconnected.
 
-Snapshots are retained for a configurable number of days.
-Older snapshots are automatically removed during each run.
+---
 
-This keeps storage usage predictable while preserving recent
-recovery points.
+### External backup device
 
-### Recovery
+External snapshots are stored at:
 
-Because each snapshot appears as a full filesystem tree,
-files can be restored simply by copying them back from the
-desired snapshot directory.
+```
+/mnt/semantic_backup/snapshots
+```
+
+The external drive is mounted dynamically using its UUID.
+
+Example mount command:
+
+```
+mount -U <UUID> /mnt/semantic_backup
+```
+
+The drive is automatically unmounted after synchronization.
+
+---
+
+### Retention policy
+
+Old snapshots are automatically removed.
+
+Default configuration:
+
+```
+RETENTION_DAYS=7
+```
+
+Snapshots older than the retention period are deleted both:
+
+* locally
+* on the external drive
+
+---
+
+### Include / Exclude policy
+
+Backup scope is controlled using two files:
+
+```
+include.txt
+exclude.txt
+```
+
+Typical structure:
+
+```
+include.txt
+-----------
+
+Documents
+Projects
+infra
+```
+
+```
+exclude.txt
+-----------
+
+.cache
+.local/share/Trash
+node_modules
+```
+
+These allow precise control of what is backed up.
+
+---
+
+# Commands
+
+### Run backup manually
+
+```
+sudo semantic-backup run
+```
+
+Example output:
+
+```
+Semantic Backup
+Creating local snapshot...
+Local snapshot complete.
+Syncing snapshot to external...
+Backup completed successfully.
+```
+
+---
+
+### Verify snapshots
+
+```
+sudo semantic-backup verify
+```
+
+Displays:
+
+* available snapshots
+* disk usage
+* preview of latest snapshot
+
+---
+
+### Restore a snapshot
+
+```
+sudo semantic-backup restore YYYYMMDD
+```
+
+Example:
+
+```
+sudo semantic-backup restore 20260306
+```
+
+---
+
+# Automation
+
+Backups are executed automatically via **systemd timer**.
+
+Service:
+
+```
+semantic-backup.service
+```
+
+Timer:
+
+```
+semantic-backup.timer
+```
+
+Example schedule:
+
+```
+Daily at 00:00
+```
+
+Check timers:
+
+```
+systemctl list-timers
+```
+
+---
+
+# Snapshot Location
+
+Local snapshots:
+
+```
+/var/lib/semantic-backup/snapshots
+```
+
+External snapshots:
+
+```
+/mnt/semantic_backup/snapshots
+```
+
+---
+
+# Project Structure
+
+```
+semantic-backup/
+
+semantic-backup        main backup engine
+backup-now.sh          helper script for manual runs
+include.txt            include policy
+exclude.txt            exclude policy
+README.md
+```
+
+---
+
+# Safety design
+
+The system is intentionally conservative:
+
+* Local snapshot always happens first
+* External sync happens second
+* Filesystem buffers are flushed
+* External drive is safely unmounted
+
+This minimizes the risk of **backup corruption or partial snapshots**.
+
+---
+
+# Version
+
+Current stable version:
+
+```
+v0.3.2
+```
+
+Highlights:
+
+* Production snapshot engine
+* Local-first architecture
+* UUID-based external mount
+* Filesystem restructuring
+* Robust systemd integration
+
+---
+
+# License
+
+MIT License
+
+---
+
+# Author
+
+Jacques Lerner
