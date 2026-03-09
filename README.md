@@ -1,24 +1,38 @@
 # Semantic Backup
 
-**Semantic Backup** is a lightweight Linux backup system designed for reliability, transparency, and zero-surprise recovery.
+**Semantic Backup** is a lightweight Linux backup system built around `rsync` snapshotting.
 
-It creates **incremental daily snapshots** of selected directories, keeps them locally, and synchronizes them to an external device when available.
+It creates incremental snapshots of selected parts of a user's home directory, stores them locally, and optionally synchronizes them to an external device.
 
-The design philosophy is:
+The goal is simple:
+
+**Provide reliable, transparent backups that make rebuilding a personal Linux environment straightforward after a system failure.**
+
+The project intentionally remains minimal and is built using only:
+
+* Bash
+* rsync
+* systemd (optional for automation)
+
+---
+
+# Design Philosophy
+
+Semantic Backup follows a few simple principles:
 
 * **Local-first backups**
-* **Deterministic snapshots**
+* **Deterministic filesystem snapshots**
 * **Minimal dependencies**
-* **Transparent filesystem structure**
+* **Transparent and inspectable backup structure**
 * **Safe external synchronization**
 
-The project is intentionally simple: it is built entirely around **bash + rsync + systemd**.
+The system focuses on preserving **meaningful user data**, not full system images.
 
 ---
 
 # Features
 
-### Incremental snapshot engine
+### Incremental snapshots
 
 Snapshots are stored as dated directories:
 
@@ -29,7 +43,7 @@ YYYYMMDD
 Example:
 
 ```
-/var/lib/semantic-backup/snapshots/
+snapshots/
 
 20260302
 20260303
@@ -37,50 +51,42 @@ Example:
 20260306
 ```
 
-Snapshots use `rsync --link-dest`, meaning unchanged files are **hard-linked** to previous snapshots.
-This provides **incremental storage with full snapshot visibility**.
-
-Each snapshot behaves like a **complete filesystem copy**, while consuming minimal disk space.
+Snapshots use `rsync --link-dest`, which means unchanged files are **hard-linked** to previous snapshots.
+Each snapshot appears as a **complete filesystem copy**, while using minimal additional disk space.
 
 ---
 
 ### Local-first backup strategy
 
-Backups are always created locally first:
+Snapshots are always created locally first.
+
+Example local storage location:
 
 ```
 /var/lib/semantic-backup/snapshots
 ```
 
-Only after a successful local snapshot does the system:
+After the local snapshot is successfully created, the system may:
 
 1. Mount the external backup device
 2. Synchronize snapshots
 3. Apply retention policies
-4. Flush buffers
+4. Flush filesystem buffers
 5. Safely unmount the device
 
-This guarantees that **local recovery is always possible**, even if the external drive is disconnected.
+This guarantees that **local recovery remains possible even if the external drive is unavailable**.
 
 ---
 
-### External backup device
+### External backup synchronization
 
-External snapshots are stored at:
+External snapshots may be stored at:
 
 ```
 /mnt/semantic_backup/snapshots
 ```
 
-The external drive is mounted dynamically using its UUID.
-
-Example mount command:
-
-```
-mount -U <UUID> /mnt/semantic_backup
-```
-
-The drive is automatically unmounted after synchronization.
+The external device is mounted dynamically using its UUID and automatically unmounted after synchronization.
 
 ---
 
@@ -88,7 +94,7 @@ The drive is automatically unmounted after synchronization.
 
 Old snapshots are automatically removed.
 
-Default configuration:
+Example configuration:
 
 ```
 RETENTION_DAYS=7
@@ -97,179 +103,119 @@ RETENTION_DAYS=7
 Snapshots older than the retention period are deleted both:
 
 * locally
-* on the external drive
+* on the external device
 
 ---
 
-### Include / Exclude policy
-
-Backup scope is controlled using two files:
+# Repository Structure
 
 ```
-include.txt
-exclude.txt
+semantic-backup/
+
+backup-now.sh        main backup script
+include.txt          include policy
+exclude.txt          exclude policy
+README.md
+.gitignore
 ```
 
-Typical structure:
+---
+
+# Backup Scope
+
+Backup scope is defined using two configuration files.
+
+### include.txt
+
+Defines directories or files to include in the backup.
+
+Example:
 
 ```
-include.txt
------------
+Documents/
+Projects/
+infra/engine/
 
-Documents
-Projects
-infra
+.gitconfig
+.ssh/
 ```
 
-```
-exclude.txt
------------
+Paths are relative to the user's home directory.
 
+---
+
+### exclude.txt
+
+Defines paths that should be excluded from backup.
+
+Example:
+
+```
 .cache
 .local/share/Trash
 node_modules
 ```
 
-These allow precise control of what is backed up.
+These files allow precise control over the backup scope.
 
 ---
 
-# Commands
+# Running a Backup
 
-### Run backup manually
-
-```
-sudo semantic-backup run
-```
-
-Example output:
+Run the backup manually:
 
 ```
-Semantic Backup
-Creating local snapshot...
-Local snapshot complete.
-Syncing snapshot to external...
-Backup completed successfully.
+./backup-now.sh
 ```
+
+Automation can be implemented using a `systemd` timer or a cron job.
 
 ---
 
-### Verify snapshots
+# Snapshot Structure
 
-```
-sudo semantic-backup verify
-```
-
-Displays:
-
-* available snapshots
-* disk usage
-* preview of latest snapshot
-
----
-
-### Restore a snapshot
-
-```
-sudo semantic-backup restore YYYYMMDD
-```
+Snapshots behave like normal directories and can be browsed directly.
 
 Example:
 
 ```
-sudo semantic-backup restore 20260306
+snapshots/
+
+20260306/
+20260307/
+20260308/
 ```
+
+Each directory represents a complete view of the filesystem at that point in time.
 
 ---
 
-# Automation
+# Restoring Files
 
-Backups are executed automatically via **systemd timer**.
+Because snapshots are regular directories, files can be restored using standard tools.
 
-Service:
-
-```
-semantic-backup.service
-```
-
-Timer:
+Example:
 
 ```
-semantic-backup.timer
+rsync -a snapshots/20260309/ ~/
 ```
 
-Example schedule:
-
-```
-Daily at 00:00
-```
-
-Check timers:
-
-```
-systemctl list-timers
-```
+Or by manually copying files from a specific snapshot.
 
 ---
 
-# Snapshot Location
+# Philosophy
 
-Local snapshots:
+Semantic Backup focuses on backing up **what matters**, rather than copying entire systems.
 
-```
-/var/lib/semantic-backup/snapshots
-```
+Typical preserved data includes:
 
-External snapshots:
+* personal documents
+* projects
+* configuration files
+* infrastructure scripts
 
-```
-/mnt/semantic_backup/snapshots
-```
-
----
-
-# Project Structure
-
-```
-semantic-backup/
-
-semantic-backup        main backup engine
-backup-now.sh          helper script for manual runs
-include.txt            include policy
-exclude.txt            exclude policy
-README.md
-```
-
----
-
-# Safety design
-
-The system is intentionally conservative:
-
-* Local snapshot always happens first
-* External sync happens second
-* Filesystem buffers are flushed
-* External drive is safely unmounted
-
-This minimizes the risk of **backup corruption or partial snapshots**.
-
----
-
-# Version
-
-Current stable version:
-
-```
-v0.3.2
-```
-
-Highlights:
-
-* Production snapshot engine
-* Local-first architecture
-* UUID-based external mount
-* Filesystem restructuring
-* Robust systemd integration
+This approach keeps backups **small, fast, and easy to restore**.
 
 ---
 
@@ -282,3 +228,4 @@ MIT License
 # Author
 
 Jacques Lerner
+
