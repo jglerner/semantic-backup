@@ -8,13 +8,19 @@ set -euo pipefail
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 ########################################
+# SCRIPT LOCATION
+########################################
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+########################################
 # CONFIGURATION
 ########################################
 
 RETENTION_DAYS=7
 
 SOURCE="/home/jglerner"
-INCLUDE_FILE="/home/jglerner/infra/engine/include.txt"
+INCLUDE_FILE=INCLUDE_FILE="$SCRIPT_DIR/include.txt"
 
 LOCAL_BASE="/home/jglerner/infra/snapshots"
 
@@ -23,7 +29,37 @@ UUID="f0e81617-0984-4bfc-bc9e-e01624dac735"
 EXTERNAL_BASE="$MOUNT_POINT/snapshots"
 
 TODAY=$(date +%Y%m%d)
-LOCAL_TODAY="$LOCAL_BASE/$TODAY"
+LOCAL_TODAY="$LOCAL_BASE/.${TODAY}.partial"
+
+rm -rf "$PARTIAL"
+
+if [ -d "$LOCAL_TODAY" ]; then
+    echo "Snapshot for today already exists."
+else
+    PREVIOUS=$(ls -1 "$LOCAL_BASE" 2>/dev/null | sort | tail -n 1 || true)
+
+    if [ -n "$PREVIOUS" ] && [ -d "$LOCAL_BASE/$PREVIOUS" ]; then
+        echo "Using previous snapshot: $PREVIOUS"
+        LINK_DEST="--link-dest=$LOCAL_BASE/$PREVIOUS"
+    else
+        echo "No previous snapshot found. Creating full snapshot."
+        LINK_DEST=""
+    fi
+
+    echo "Creating snapshot in temporary directory..."
+
+    rsync -a --delete \
+        $LINK_DEST \
+        --files-from="$INCLUDE_FILE" \
+        "$SOURCE/" \
+        "$PARTIAL"
+
+    echo "Finalizing snapshot..."
+
+    mv "$PARTIAL" "$LOCAL_TODAY"
+
+    echo "Snapshot complete."
+fi
 
 ########################################
 # FUNCTIONS
@@ -94,6 +130,12 @@ echo "Mounting external drive..."
 
 mount UUID="$UUID" "$MOUNT_POINT"
 
+if ! mountpoint -q "$MOUNT_POINT"; then
+    echo "ERROR: external backup disk failed to mount."
+    send_failure_mail
+    exit 1
+fi
+
 echo "External drive mounted."
 
 mkdir -p "$EXTERNAL_BASE"
@@ -102,7 +144,7 @@ echo "Syncing snapshot to external..."
 
 rsync -a --delete --checksum \
     "$LOCAL_TODAY" \
-    "$EXTERNAL_BASE/"
+    "$EXTERNAL_BASE/$TODAY/"
 
 echo "External sync complete."
 
