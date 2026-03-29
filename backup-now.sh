@@ -17,10 +17,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # CONFIGURATION
 ########################################
 
-RETENTION_DAYS=7
+KEEP=3   # exactly 3 snapshots kept on both local disk and pendrive
 
 SOURCE="/home/jglerner"
-INCLUDE_FILE=INCLUDE_FILE="$SCRIPT_DIR/include.txt"
+INCLUDE_FILE="$SCRIPT_DIR/include.txt"
+EXCLUDE_FILE="$SCRIPT_DIR/exclude.txt"
 
 LOCAL_BASE="/home/jglerner/infra/snapshots"
 
@@ -29,57 +30,32 @@ UUID="f0e81617-0984-4bfc-bc9e-e01624dac735"
 EXTERNAL_BASE="$MOUNT_POINT/snapshots"
 
 TODAY=$(date +%Y%m%d)
-LOCAL_TODAY="$LOCAL_BASE/.${TODAY}.partial"
-
-rm -rf "$PARTIAL"
-
-if [ -d "$LOCAL_TODAY" ]; then
-    echo "Snapshot for today already exists."
-else
-    PREVIOUS=$(ls -1 "$LOCAL_BASE" 2>/dev/null | sort | tail -n 1 || true)
-
-    if [ -n "$PREVIOUS" ] && [ -d "$LOCAL_BASE/$PREVIOUS" ]; then
-        echo "Using previous snapshot: $PREVIOUS"
-        LINK_DEST="--link-dest=$LOCAL_BASE/$PREVIOUS"
-    else
-        echo "No previous snapshot found. Creating full snapshot."
-        LINK_DEST=""
-    fi
-
-    echo "Creating snapshot in temporary directory..."
-
-    rsync -a --delete \
-        $LINK_DEST \
-        --files-from="$INCLUDE_FILE" \
-        "$SOURCE/" \
-        "$PARTIAL"
-
-    echo "Finalizing snapshot..."
-
-    mv "$PARTIAL" "$LOCAL_TODAY"
-
-    echo "Snapshot complete."
-fi
+LOCAL_TODAY="$LOCAL_BASE/$TODAY"
+PARTIAL="$LOCAL_BASE/.${TODAY}.partial"   # written here, renamed atomically on success
 
 ########################################
 # FUNCTIONS
 ########################################
 
+BACKUP_FAILED=0
+
 send_failure_mail() {
     echo "Semantic backup FAILED on $(hostname) at $(date)" \
-        | mail -s "Backup FAILED" jglerner@gmail.com
+        | mail -s "Backup FAILED" jglerner@gmail.com 2>/dev/null || true
 }
 
-cleanup_mount() {
-    if mountpoint -q "$MOUNT_POINT"; then
-        echo "Cleaning up mount..."
+cleanup() {
+    rm -rf "$PARTIAL"
+    if mountpoint -q "$MOUNT_POINT" 2>/dev/null; then
         cd /
         sync
         umount "$MOUNT_POINT" || true
     fi
+    [ "$BACKUP_FAILED" -eq 1 ] && send_failure_mail
 }
 
-trap cleanup_mount EXIT
+trap cleanup EXIT
+trap 'BACKUP_FAILED=1' ERR
 
 ########################################
 # START
@@ -96,73 +72,73 @@ echo "======================================="
 mkdir -p "$LOCAL_BASE"
 
 if [ -d "$LOCAL_TODAY" ]; then
-    echo "Snapshot for today already exists."
+    echo "Today's snapshot already exists ($TODAY), skipping."
 else
-    PREVIOUS=$(ls -1 "$LOCAL_BASE" 2>/dev/null | sort | tail -n 1 || true)
+    # Most recent completed snapshot → used as hard-link base to save space
+    PREVIOUS=$(ls -1d "$LOCAL_BASE"/[0-9]* 2>/dev/null | sort | tail -n 1 || true)
 
-    if [ -n "$PREVIOUS" ] && [ -d "$LOCAL_BASE/$PREVIOUS" ]; then
-        echo "Using previous snapshot: $PREVIOUS"
-        LINK_DEST="--link-dest=$LOCAL_BASE/$PREVIOUS"
+    LINK_DEST=()
+    if [ -n "$PREVIOUS" ]; then
+        echo "Using previous snapshot as base: $(basename "$PREVIOUS")"
+        LINK_DEST=("--link-dest=$PREVIOUS")
     else
         echo "No previous snapshot found. Creating full snapshot."
-        LINK_DEST=""
     fi
 
+    rm -rf "$PARTIAL"
+    mkdir -p "$PARTIAL"
+
     echo "Creating local snapshot..."
-
-    rsync -a --delete \
-        $LINK_DEST \
+    rsync -a \
+        "${LINK_DEST[@]}" \
         --files-from="$INCLUDE_FILE" \
+        --exclude-from="$EXCLUDE_FILE" \
         "$SOURCE/" \
-        "$LOCAL_TODAY"
+        "$PARTIAL/"
 
-    echo "Local snapshot complete."
+    mv "$PARTIAL" "$LOCAL_TODAY"
+    echo "Local snapshot complete: $LOCAL_TODAY"
 fi
 
-echo "Applying local retention policy..."
-find "$LOCAL_BASE" -mindepth 1 -maxdepth 1 -type d -mtime +$RETENTION_DAYS -exec rm -rf {} +
+# Count-based rotation: remove oldest directories beyond KEEP
+echo "Applying local retention (keep $KEEP)..."
+ls -1d "$LOCAL_BASE"/[0-9]* 2>/dev/null | sort | head -n "-$KEEP" | xargs -r rm -rf
+echo "Local snapshots now: $(ls -1d "$LOCAL_BASE"/[0-9]* 2>/dev/null | wc -l)"
 
 ########################################
-# EXTERNAL SYNC
+# EXTERNAL SYNC  (pendrive SLOTX_01)
 ########################################
 
+mkdir -p "$MOUNT_POINT"
 echo "Mounting external drive..."
-
-mount UUID="$UUID" "$MOUNT_POINT"
+mount -U "$UUID" "$MOUNT_POINT"
 
 if ! mountpoint -q "$MOUNT_POINT"; then
-    echo "ERROR: external backup disk failed to mount."
-    send_failure_mail
+    echo "ERROR: pendrive failed to mount."
+    BACKUP_FAILED=1
     exit 1
 fi
 
 echo "External drive mounted."
-
 mkdir -p "$EXTERNAL_BASE"
 
-echo "Syncing snapshot to external..."
-
-rsync -a --delete --checksum \
-    "$LOCAL_TODAY" \
-    "$EXTERNAL_BASE/$TODAY/"
+# Sync the entire local snapshot directory.
+# -H preserves hard links across snapshot dirs → space-efficient on the pendrive too.
+# --delete removes from pendrive any snapshot that was already rotated out locally.
+echo "Syncing all $KEEP snapshots to pendrive (hard-links preserved)..."
+rsync -aH --delete \
+    "$LOCAL_BASE/" \
+    "$EXTERNAL_BASE/"
 
 echo "External sync complete."
-
-echo "Applying external retention policy..."
-find "$EXTERNAL_BASE" -mindepth 1 -maxdepth 1 -type d -mtime +$RETENTION_DAYS -exec rm -rf {} +
-
-echo "Flushing filesystem buffers..."
 sync
-
 cd /
 
-echo "Unmounting external drive..."
+echo "Unmounting pendrive..."
 umount "$MOUNT_POINT"
-
-echo "External drive safely unmounted."
+echo "Pendrive safely unmounted."
 
 echo "======================================="
-echo " Backup Completed Successfully"
+echo " Backup completed successfully $(date)"
 echo "======================================="
-
 exit 0
