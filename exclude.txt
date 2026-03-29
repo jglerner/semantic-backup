@@ -1,6 +1,7 @@
 # System noise
 .cache/
 .local/share/Trash/
+.local/share/nicotine/
 lost+found/
 
 # Temporary / rebuildable
@@ -17,3 +18,6 @@ lost+found/
 /mnt/
 /media/
 /timeshift/
+
+# Music
+~/Music/*
