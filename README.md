@@ -48,7 +48,6 @@ snapshots/
 20260302
 20260303
 20260304
-20260306
 ```
 
 Snapshots use `rsync --link-dest`, which means unchanged files are **hard-linked** to previous snapshots.
